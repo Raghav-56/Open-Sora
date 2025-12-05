@@ -16,9 +16,16 @@ from colossalai.utils.safetensors import save as async_save
 from colossalai.zero.low_level import LowLevelZeroOptimizer
 from huggingface_hub import hf_hub_download
 from safetensors.torch import load_file
-from tensornvme.async_file_io import AsyncFileWriter
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
+
+# Optional tensornvme import - requires cmake to build, may not be available
+try:
+    from tensornvme.async_file_io import AsyncFileWriter
+    TENSORNVME_AVAILABLE = True
+except ImportError:
+    AsyncFileWriter = None
+    TENSORNVME_AVAILABLE = False
 
 from opensora.acceleration.parallel_states import get_data_parallel_group
 
@@ -27,7 +34,9 @@ from .logger import log_message
 hf_endpoint = os.environ.get("HF_ENDPOINT")
 if hf_endpoint is None:
     hf_endpoint = "https://huggingface.co"
-os.environ["TENSORNVME_DEBUG"] = "1"
+
+if TENSORNVME_AVAILABLE:
+    os.environ["TENSORNVME_DEBUG"] = "1"
 
 
 def load_from_hf_hub(repo_path: str, cache_dir: str = None) -> str:
@@ -335,10 +344,10 @@ def load_master_weights(model: torch.nn.Module, optimizer: LowLevelZeroOptimizer
 class CheckpointIO:
     def __init__(self, n_write_entries: int = 32):
         self.n_write_entries = n_write_entries
-        self.writer: Optional[AsyncFileWriter] = None
+        self.writer = None  # AsyncFileWriter when tensornvme is available
         self.pinned_state_dict: Optional[Dict[str, torch.Tensor]] = None
         self.master_pinned_state_dict: Optional[Dict[str, torch.Tensor]] = None
-        self.master_writer: Optional[AsyncFileWriter] = None
+        self.master_writer = None  # AsyncFileWriter when tensornvme is available
 
     def _sync_io(self):
         if self.writer is not None:
@@ -404,8 +413,19 @@ class CheckpointIO:
             str: The path to the saved checkpoint
         """
         self._sync_io()
+        
+        # Check if async_io is requested but tensornvme is not available
+        if async_io and not TENSORNVME_AVAILABLE:
+            log_message(
+                "Warning: async_io requested but tensornvme is not available. "
+                "Falling back to synchronous I/O. Install tensornvme for async support: "
+                "pip install git+https://github.com/hpcaitech/TensorNVMe.git"
+            )
+            async_io = False
+        
         save_dir = os.path.join(save_dir, f"epoch{epoch}-global_step{actual_update_step}")
-        os.environ["TENSORNVME_DEBUG_LOG"] = os.path.join(save_dir, "async_file_io.log")
+        if TENSORNVME_AVAILABLE:
+            os.environ["TENSORNVME_DEBUG_LOG"] = os.path.join(save_dir, "async_file_io.log")
         if model is not None:
             if not lora:
                 os.makedirs(os.path.join(save_dir, "model"), exist_ok=True)

@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "open-sora"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "accelerate>=0.29.2",
+    "av==13.1.0",
+    "colossalai>=0.4.4",
+    "flash-attn",
+    "ftfy>=6.2.0",
+    "liger-kernel==0.5.2",
+    "mmengine>=0.10.3",
+    "omegaconf>=2.3.0",
+    "openai>=1.52.2",
+    "pandarallel>=1.6.5",
+    "pandas>=2.0.3",
+    "pre-commit>=3.5.0",
+    "pyarrow>=22.0.0",
+    "tensorboard>=2.14.0",
+    "torch==2.4.0",
+    "torchvision==0.19.0",
+    "wandb>=0.17.0",
+    "xformers",
+    "huggingface_hub[cli]",
+]
+
+[tool.uv]
+no-build-isolation-package = ["flash-attn"]
+package = true
+
+[[tool.uv.index]]
+name = "pytorch-cu121"
+url = "https://download.pytorch.org/whl/cu121"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu121" }
+torchvision = { index = "pytorch-cu121" }
+xformers = { index = "pytorch-cu121" }
