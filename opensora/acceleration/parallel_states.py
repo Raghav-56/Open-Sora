@@ -10,7 +10,9 @@ def set_data_parallel_group(group: dist.ProcessGroup):
 def get_data_parallel_group(get_mixed_dp_pg : bool = False):
     if get_mixed_dp_pg and "mixed_dp_group" in _GLOBAL_PARALLEL_GROUPS:
         return _GLOBAL_PARALLEL_GROUPS["mixed_dp_group"]
-    return _GLOBAL_PARALLEL_GROUPS.get("data", dist.group.WORLD)
+    # Return None for non-distributed mode instead of dist.group.WORLD
+    # This prevents accidental use of uninitialized process groups
+    return _GLOBAL_PARALLEL_GROUPS.get("data", None)
 
 
 def set_sequence_parallel_group(group: dist.ProcessGroup):

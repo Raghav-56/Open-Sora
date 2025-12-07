@@ -57,12 +57,27 @@ def main():
         set_seed(seed)
 
     # == init distributed env ==
-    init_inference_environment()
+    from opensora.utils.logger import is_distributed
+    distributed_mode = is_distributed()
+    
+    if distributed_mode:
+        init_inference_environment()
+    else:
+        # Single GPU optimization: Skip ColossalAI initialization
+        pass
+    
     logger = create_logger()
     logger.info("Inference configuration:\n %s", pformat(cfg.to_dict()))
-    is_saving_process = get_is_saving_process(cfg)
-    booster = get_booster(cfg)
-    booster_ae = get_booster(cfg, ae=True)
+    mode_str = "distributed" if distributed_mode else "single-GPU"
+    logger.info("Running in %s mode", mode_str)
+    
+    if distributed_mode:
+        is_saving_process = get_is_saving_process(cfg)
+    else:
+        is_saving_process = True
+    
+    booster = get_booster(cfg) if distributed_mode else None
+    booster_ae = get_booster(cfg, ae=True) if distributed_mode else None
 
     # ======================================================
     # 2. build dataset and dataloader
@@ -76,7 +91,11 @@ def main():
     # == build dataset ==
     if cfg.get("prompt"):
         cfg.dataset.data_path = create_tmp_csv(save_dir, cfg.prompt, cfg.get("ref", None), create=is_main_process())
-    dist.barrier()
+    
+    # Single-GPU optimization: Skip barrier if not in distributed mode
+    if distributed_mode:
+        dist.barrier()
+    
     dataset = build_module(cfg.dataset, DATASETS)
 
     # range selection
@@ -128,6 +147,11 @@ def main():
         cfg, device, dtype, offload_model=cfg.get("offload_model", False)
     )
     log_cuda_max_memory("build model")
+
+    # Production optimization: Clear cache after model loading
+    if device == "cuda" and not distributed_mode:
+        torch.cuda.empty_cache()
+        logger.info("Cleared CUDA cache after model loading")
 
     if booster:
         model, _, _, _, _ = booster.boost(model=model)

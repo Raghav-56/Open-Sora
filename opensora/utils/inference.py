@@ -21,23 +21,37 @@ class SamplingMethod(Enum):
 def create_tmp_csv(save_dir: str, prompt: str, ref: str = None, create=True) -> str:
     """
     Create a temporary CSV file with the prompt text.
+    Uses timestamped unique names to avoid conflicts in production.
 
     Args:
         save_dir (str): The directory where the CSV file will be saved.
         prompt (str): The prompt text.
+        ref (str): Optional reference path for i2v mode.
+        create (bool): Whether to create the file.
 
     Returns:
         str: The path to the temporary CSV file.
     """
-    tmp_file = os.path.join(save_dir, "prompt.csv")
+    import time
+    # Use unique filename with timestamp and PID for multi-worker safety
+    timestamp = int(time.time() * 1000000)  # microsecond precision
+    pid = os.getpid()
+    tmp_file = os.path.join(save_dir, f"prompt_{timestamp}_{pid}.csv")
+    
     if not create:
         return tmp_file
-    with open(tmp_file, "w", encoding="utf-8") as f:
-        if ref is not None:
-            f.write(f'text,ref\n"{prompt}","{ref}"')
-        else:
-            f.write(f'text\n"{prompt}"')
-    return tmp_file
+    
+    try:
+        with open(tmp_file, "w", encoding="utf-8") as f:
+            if ref is not None:
+                f.write(f'text,ref\n"{prompt}","{ref}"')
+            else:
+                f.write(f'text\n"{prompt}"')
+        return tmp_file
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to create CSV at {tmp_file}: {e}"
+        ) from e
 
 
 def modify_option_to_t2i(sampling_option, distilled: bool = False, img_resolution: str = "1080px"):

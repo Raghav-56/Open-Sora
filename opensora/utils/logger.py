@@ -11,7 +11,14 @@ def is_distributed() -> bool:
     Returns:
         bool: True if running in a distributed setting, False otherwise
     """
-    return os.environ.get("WORLD_SIZE", None) is not None
+    # More robust check: WORLD_SIZE must be set AND > 1
+    world_size = os.environ.get("WORLD_SIZE", None)
+    if world_size is None:
+        return False
+    try:
+        return int(world_size) > 1
+    except (ValueError, TypeError):
+        return False
 
 
 def is_main_process() -> bool:

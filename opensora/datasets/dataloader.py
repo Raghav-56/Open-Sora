@@ -247,6 +247,24 @@ def prepare_dataloader(
 ):
     _kwargs = kwargs.copy()
     if isinstance(dataset, VideoTextDataset):
+        # Single-GPU optimization: Use simple DataLoader without buckets
+        if process_group is None:
+            dl_cls = DataloaderForVideo if cache_pin_memory else DataLoader
+            return (
+                dl_cls(
+                    dataset,
+                    batch_size=batch_size,
+                    shuffle=shuffle,
+                    worker_init_fn=get_seed_worker(seed),
+                    drop_last=drop_last,
+                    pin_memory=pin_memory,
+                    num_workers=num_workers,
+                    collate_fn=collate_fn_default,
+                    prefetch_factor=prefetch_factor,
+                    **_kwargs,
+                ),
+                None,
+            )
         batch_sampler = VariableVideoBatchSampler(
             dataset,
             bucket_config,
